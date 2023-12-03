@@ -11,26 +11,14 @@ import com.azure.resourcemanager.compute.models.KnownWindowsVirtualMachineImage;
 import com.azure.resourcemanager.compute.models.VirtualMachine;
 import com.azure.resourcemanager.compute.models.VirtualMachineSizeTypes;
 import com.azure.resourcemanager.network.models.Network;
+import com.azure.resourcemanager.network.models.NetworkInterface;
+import com.azure.resourcemanager.network.models.NetworkSecurityGroup;
+import com.azure.resourcemanager.network.models.SecurityRuleProtocol;
 import com.azure.core.management.Region;
 import com.azure.resourcemanager.resources.fluentcore.model.Creatable;
 import com.azure.core.management.profile.AzureProfile;
 
 import java.util.Date;
-
-/**
- * Azure Compute sample for managing virtual machines -
- *  - Create a virtual machine with managed OS Disk
- *  - Start a virtual machine
- *  - Stop a virtual machine
- *  - Restart a virtual machine
- *  - Update a virtual machine
- *    - Tag a virtual machine (there are many possible variations here)
- *    - Attach data disks
- *    - Detach data disks
- *  - List virtual machines
- *  - Delete a virtual machine.
- */
-
 
 public class Main {
 
@@ -89,6 +77,86 @@ public class Main {
 
         Date t1 = new Date();
 
+        //=====================================================================================================================
+        // 5. Create a network security group contains two rules
+        // - ALLOW-SSH- allows RDP traffic into the VM
+        // - ALLOW-WEB- allows HTTP traffic OutBound
+        // - ALLOW-WEB- allows HTTPS traffic OutBound
+        //=====================================================================================================================
+
+        System.out.println("Creating a security group for the front end - allows SSH and HTTP");
+        NetworkSecurityGroup NSG = azureResourceManager.networkSecurityGroups().define("NSGName")
+                .withRegion(Region.US_WEST)
+                .withNewResourceGroup(rgName)
+                .defineRule("ALLOW-RDP")
+                .allowInbound()
+                .fromAnyAddress()
+                .fromAnyPort()
+                .toAnyAddress()
+                .toPort(3389)
+                .withProtocol(SecurityRuleProtocol.TCP)
+                .withPriority(100)
+                .withDescription("Allow RDP")
+                .attach()
+                .defineRule("ALLOW-HTTP")
+                .allowOutbound()
+                .fromAnyAddress()
+                .fromAnyPort()
+                .toAnyAddress()
+                .toPort(80)
+                .withProtocol(SecurityRuleProtocol.TCP)
+                .withPriority(101)
+                .withDescription("Allow HTTP")
+                .attach()
+                .defineRule("ALLOW-HTTS")
+                .allowOutbound()
+                .fromAnyAddress()
+                .fromAnyPort()
+                .toAnyAddress()
+                .toPort(443)
+                .withProtocol(SecurityRuleProtocol.TCP)
+                .withPriority(102)
+                .withDescription("Allow HTTS")
+                .attach()
+                .create();
+
+        System.out.println("Created a security group for the front end: " + NSG.id());
+
+        //================================================================================================
+        // 6. Create a Network
+        //================================================================================================
+
+        Network network = azureResourceManager.networks().define("mynetwork")
+        .withRegion(Region.US_WEST)
+        .withNewResourceGroup()
+        .withAddressSpace("10.0.0.0/28")
+        .withSubnet("subnet1", "10.0.0.0/29")
+        .withDnsServer("8.8.8.8")  // Add your DNS servers here
+        .withDnsServer("8.8.4.4")
+        .withDnsServer("10.1.1.1")
+        .withDnsServer("10.1.2.4")
+        .create();
+
+        System.out.println("Created a virtual network: " + network.id());
+
+        //================================================================================================
+        // 7. Create a network interface and apply the network security group created in the step 5.
+        //================================================================================================
+
+        String publicIPAddressLeafDNS1 = "myPublicIPAddress";
+
+        System.out.println("Creating a network interface for the back end");
+
+        NetworkInterface networkInterface = azureResourceManager.networkInterfaces().define("mynetworkInterface")
+                .withRegion(Region.US_WEST)
+                .withExistingResourceGroup(rgName)
+                .withExistingPrimaryNetwork(network)
+                .withSubnet("subnet1")
+                .withPrimaryPrivateIPAddressDynamic()
+                .withNewPrimaryPublicIPAddress(publicIPAddressLeafDNS1)
+                .withExistingNetworkSecurityGroup(NSG)
+                .create();
+
         //------------------------------------------------------------------------------------------------------------
         // 5. Create a VM
         //------------------------------------------------------------------------------------------------------------
@@ -101,9 +169,7 @@ public class Main {
                 .define(windowsVMName)
                     .withRegion(Region.US_WEST)
                     .withNewResourceGroup(rgName)
-                    .withNewPrimaryNetwork("10.0.0.0/28")
-                    .withPrimaryPrivateIPAddressDynamic()
-                    .withoutPrimaryPublicIPAddress()
+                    .withExistingPrimaryNetworkInterface(networkInterface)                    
                     .withPopularWindowsImage(KnownWindowsVirtualMachineImage.WINDOWS_SERVER_2019_DATACENTER_GEN2)
                     .withAdminUsername(userName)
                     .withAdminPassword(password)
