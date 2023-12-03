@@ -1,5 +1,13 @@
 # Azure_SDK_Java_Sample3_Create_Windows_VirtualMachine
 
+## 0. Prerequisite
+
+For creating a Java blank application in VSCode see this repos:
+
+https://github.com/luiscoco/Java_Maven_Sample
+
+https://github.com/luiscoco/Azure_SDK_Java_Sample1_CreateResourceGroup
+
 ## 1. Main.java
 
 ```java
